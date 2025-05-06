@@ -138,26 +138,92 @@ def load_hetero(network_path):
     protein_disease = np.loadtxt(network_path + 'mat_protein_disease.txt')
     disease_protein = protein_disease.T
 
-    d_d = dgl.graph(sparse.csr_matrix(drug_drug), ntype='drug', etype='similarity')
-    num_drug = d_d.number_of_nodes()
-    d_c = dgl.graph(sparse.csr_matrix(drug_chemical), ntype='drug', etype='chemical')
-    d_di = dgl.bipartite(sparse.csr_matrix(drug_disease), 'drug', 'ddi', 'disease')
-    di_d = dgl.bipartite(sparse.csr_matrix(disease_drug), 'disease', 'did', 'drug')
-    d_d_p = dgl.bipartite(sparse.csr_matrix(drug_drug_protein), 'drug', 'ddp', 'protein')
+    # 수정한 부분
+    sp_drug_drug = sparse.csr_matrix(drug_drug)
+    sp_drug_chemical = sparse.csr_matrix(drug_chemical)
+    sp_drug_disease = sparse.csr_matrix(drug_disease)
+    sp_disease_drug = sp_drug_disease.T
+    sp_drug_sideeffect = sparse.csr_matrix(drug_sideeffect)
+    sp_sideeffect_drug = sp_drug_sideeffect.T
+    sp_drug_protein = sparse.csr_matrix(drug_drug_protein)
+    sp_protein_drug = sp_drug_protein.T
+    sp_protein_protein = sparse.csr_matrix(protein_protein)
+    sp_protein_sequence = sparse.csr_matrix(protein_sequence)
+    sp_protein_disease = sparse.csr_matrix(protein_disease)
+    sp_disease_protein = sp_protein_disease.T
 
-    d_se = dgl.bipartite(sparse.csr_matrix(drug_sideeffect), 'drug', 'dse', 'sideeffect')
-    se_d = dgl.bipartite(sparse.csr_matrix(sideeffect_drug), 'sideeffect', 'sed', 'drug')
+    num_drug = sp_drug_drug.shape[0]
+    num_protein = sp_protein_protein.shape[0]
+    num_disease = sp_drug_disease.shape[1]
+    num_sideeffect = sp_drug_sideeffect.shape[1]
+    
+    def to_coo_int64(sp_mat):
+        coo = sp_mat.tocoo()
+        return (coo.row.astype(np.int64), coo.col.astype(np.int64))
 
-    p_p = dgl.graph(sparse.csr_matrix(protein_protein), ntype='protein', etype='similarity')
-    num_protein = p_p.number_of_nodes()
-    p_s = dgl.graph(sparse.csr_matrix(protein_sequence), ntype='protein', etype='sequence')
-    p_di = dgl.bipartite(sparse.csr_matrix(protein_disease), 'protein', 'pdi', 'disease')
-    p_d_d = dgl.bipartite(sparse.csr_matrix(protein_protein_drug), 'protein', 'pdd', 'drug')
+    drug_drug_indices = (to_coo_int64(sp_drug_drug))
+    drug_chemical_indices = (to_coo_int64(sp_drug_chemical))
+    drug_disease_indices = to_coo_int64(sp_drug_disease)
+    disease_drug_indices = to_coo_int64(sp_disease_drug)
+    drug_sideeffect_indices = to_coo_int64(sp_drug_sideeffect)
+    sideeffect_drug_indices = to_coo_int64(sp_sideeffect_drug)
+    drug_protein_indices = to_coo_int64(sp_drug_protein)
+    protein_drug_indices = to_coo_int64(sp_protein_drug)
+    protein_protein_indices = to_coo_int64(sp_protein_protein)
+    protein_sequence_indices = to_coo_int64(sp_protein_sequence)
+    protein_disease_indices = to_coo_int64(sp_protein_disease) 
+    disease_protein_indices = to_coo_int64(sp_disease_protein)
 
-    di_p = dgl.bipartite(sparse.csr_matrix(disease_protein), 'disease', 'dip', 'protein')
+    num_nodes_dict = {
+        'drug': num_drug,
+        'protein': num_protein,
+        'disease': num_disease,
+        'sideeffect': num_sideeffect
+    }
 
-    dg = dgl.hetero_from_relations([d_d, d_c, d_se, se_d, d_di, di_d, d_d_p, p_d_d])
-    pg = dgl.hetero_from_relations([p_p, p_s, p_di, di_p, p_d_d, d_d_p])
+    dg_data_dict = {
+        ('drug', 'similarity', 'drug'): drug_drug_indices,
+        ('drug', 'chemical', 'drug'): drug_chemical_indices,
+        ('drug', 'dse', 'sideeffect'): drug_sideeffect_indices,
+        ('sideeffect', 'sed', 'drug'): sideeffect_drug_indices,
+        ('drug', 'ddi', 'disease'): drug_disease_indices,
+        ('disease', 'did', 'drug'): disease_drug_indices,
+        ('drug', 'ddp', 'protein'): drug_protein_indices,
+        ('protein', 'pdd', 'drug'): protein_drug_indices
+    }
+
+    pg_data_dict = {
+        ('protein', 'similarity', 'protein'): protein_protein_indices,
+        ('protein', 'sequence', 'protein'): protein_sequence_indices,
+        ('protein', 'pdi', 'disease'): protein_disease_indices,
+        ('disease', 'dip', 'protein'): disease_protein_indices,
+        ('protein', 'pdd', 'drug'): protein_drug_indices,
+        ('drug', 'ddp', 'protein'): drug_protein_indices
+    }
+
+    dg = dgl.heterograph(dg_data_dict, num_nodes_dict=num_nodes_dict)
+    pg = dgl.heterograph(pg_data_dict, num_nodes_dict=num_nodes_dict)
+    #
+    # d_d = dgl.graph(sparse.csr_matrix(drug_drug), ntype='drug', etype='similarity')
+    # num_drug = d_d.number_of_nodes()
+    # d_c = dgl.graph(sparse.csr_matrix(drug_chemical), ntype='drug', etype='chemical')
+    # d_di = dgl.bipartite(sparse.csr_matrix(drug_disease), 'drug', 'ddi', 'disease')
+    # di_d = dgl.bipartite(sparse.csr_matrix(disease_drug), 'disease', 'did', 'drug')
+    # d_d_p = dgl.bipartite(sparse.csr_matrix(drug_drug_protein), 'drug', 'ddp', 'protein')
+
+    # d_se = dgl.bipartite(sparse.csr_matrix(drug_sideeffect), 'drug', 'dse', 'sideeffect')
+    # se_d = dgl.bipartite(sparse.csr_matrix(sideeffect_drug), 'sideeffect', 'sed', 'drug')
+
+    # p_p = dgl.graph(sparse.csr_matrix(protein_protein), ntype='protein', etype='similarity')
+    # num_protein = p_p.number_of_nodes()
+    # p_s = dgl.graph(sparse.csr_matrix(protein_sequence), ntype='protein', etype='sequence')
+    # p_di = dgl.bipartite(sparse.csr_matrix(protein_disease), 'protein', 'pdi', 'disease')
+    # p_d_d = dgl.bipartite(sparse.csr_matrix(protein_protein_drug), 'protein', 'pdd', 'drug')
+
+    # di_p = dgl.bipartite(sparse.csr_matrix(disease_protein), 'disease', 'dip', 'protein')
+
+    # dg = dgl.hetero_from_relations([d_d, d_c, d_se, se_d, d_di, di_d, d_d_p, p_d_d])
+    # pg = dgl.hetero_from_relations([p_p, p_s, p_di, di_p, p_d_d, d_d_p])
     graph = [dg, pg]
 
     dti_o = np.loadtxt(network_path + 'mat_drug_protein.txt')
@@ -239,14 +305,51 @@ def load_homo(network_path, dataName):
 
     dti_o = np.loadtxt(network_path + 'd_p_i.txt')
 
-    d_d = dgl.graph(sparse.csr_matrix(drug_drug), ntype='drug', etype='similarity')
-    p_p = dgl.graph(sparse.csr_matrix(protein_protein), ntype='protein', etype='similarity')
-    d_p = dgl.bipartite(sparse.csr_matrix(drug_protein), 'drug', 'dp', 'protein')
-    p_d = dgl.bipartite(sparse.csr_matrix(protein_drug), 'protein', 'pd', 'drug')
-    num_drug = d_d.number_of_nodes()
-    num_protein = p_p.number_of_nodes()
-    dg = dgl.hetero_from_relations([d_d, d_p, p_d])
-    pg = dgl.hetero_from_relations([p_p, p_d, d_p])
+    # d_d = dgl.graph(sparse.csr_matrix(drug_drug), ntype='drug', etype='similarity')
+    # p_p = dgl.graph(sparse.csr_matrix(protein_protein), ntype='protein', etype='similarity')
+    # d_p = dgl.bipartite(sparse.csr_matrix(drug_protein), 'drug', 'dp', 'protein')
+    # p_d = dgl.bipartite(sparse.csr_matrix(protein_drug), 'protein', 'pd', 'drug')
+    # 수정한 부분 
+    sp_drug_drug = sparse.csr_matrix(drug_drug)
+    sp_protein_protein = sparse.csr_matrix(protein_protein)
+    sp_drug_protein = sparse.csr_matrix(drug_protein)
+    sp_protein_drug = sparse.csr_matrix(protein_drug)
+    #
+    # num_drug = d_d.number_of_nodes()
+    # num_protein = p_p.number_of_nodes()
+    # 수정한 부분
+    num_drug = sp_drug_drug.shape[0]
+    num_protein = sp_protein_protein.shape[0]
+
+    sp_drug_drug_coo = sp_drug_drug.tocoo()
+    sp_protein_protein_coo = sp_protein_protein.tocoo()
+    sp_drug_protein_coo = sp_drug_protein.tocoo()
+    sp_protein_drug_coo = sp_protein_drug.tocoo()
+
+    drug_drug_indices = (sp_drug_drug_coo.row.astype(np.int64), sp_drug_drug_coo.col.astype(np.int64))
+    protein_protein_indices = (sp_protein_protein_coo.row.astype(np.int64), sp_protein_protein_coo.col.astype(np.int64))
+    drug_protein_indices = (sp_drug_protein_coo.row.astype(np.int64), sp_drug_protein_coo.col.astype(np.int64))
+    protein_drug_indices = (sp_protein_drug_coo.row.astype(np.int64), sp_protein_drug_coo.col.astype(np.int64))
+
+    dg_data_dict = {
+        ('drug', 'similarity', 'drug'): drug_drug_indices,
+        ('drug', 'dp', 'protein'): drug_protein_indices,
+        ('protein', 'pd', 'drug'): protein_drug_indices
+    }
+    pg_data_dict = {
+        ('protein', 'similarity', 'protein'): protein_protein_indices,
+        ('protein', 'pd', 'drug'): protein_drug_indices,         
+        ('drug', 'dp', 'protein'): drug_protein_indices
+    }
+
+    node_counts = {'drug': num_drug, 'protein': num_protein}
+    #
+    #dg = dgl.hetero_from_relations([d_d, d_p, p_d])
+    # pg = dgl.hetero_from_relations([p_p, p_d, d_p])
+    # 수정한 부분
+    dg = dgl.heterograph(dg_data_dict, num_nodes_dict=node_counts)
+    pg = dgl.heterograph(pg_data_dict, num_nodes_dict=node_counts)
+    #
     graph = [dg, pg]
     whole_positive_index = []
     whole_negative_index = []
@@ -560,7 +663,7 @@ def get_set(data, split=5):
         set1.append(train_index)
         set2.append(test_index)
     return set1[0].reshape(-1), set2[0].reshape(-1)
-def get_cross(data, split=5):
+def get_cross(data, split=3):
     """
     :param data: dataset and label
     :return:

@@ -43,11 +43,14 @@ def adjust_learning_rate(optimizer, epoch, lr2, lr3, lr4):
         optimizer.param_groups[3]['lr'] = lr4 * (0.55 ** (epoch // 700))
 
 
-for name in ["Es"]:
+for name in ["heter"]:
     # for name in ["heter","Es","GPCRs","ICs","Ns","zheng"]:
     dtidata, graph, num, all_meta_paths = load_dataset(name)
     # dataName heter Es GPCRs ICs Ns zheng
-    dti_label = torch.tensor(dtidata[:, 2:3]).to(args['device'])
+    # dti_label = torch.tensor(dtidata[:, 2:3]).to(args['device'])
+    # 수정된 부분
+    dti_label = torch.tensor(dtidata[:, 2:3], dtype=torch.long).to(args['device'])
+    #
 
     hd = torch.randn((num[0], in_size))
     hp = torch.randn((num[1], in_size))
@@ -61,6 +64,14 @@ for name in ["Es"]:
     cl = dti_cl
     data = dtidata
     label = dti_label
+
+    # 추가한 부분 - GPU 사용
+    if args['device'] != 'cpu':
+        print(f"Moving graphs to {args['device']}...")
+        for i in range(len(graph)):
+            graph[i] = graph[i].to(args['device'])
+        print("Graphs moved.")
+    #
 
 
     def main(tr, te, seed):

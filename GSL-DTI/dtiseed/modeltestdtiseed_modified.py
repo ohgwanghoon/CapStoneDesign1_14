@@ -48,9 +48,6 @@ class HANLayer(nn.Module):
                     g, meta_path)
         for i, meta_path in enumerate(self.meta_paths):
             new_g = self._cached_coalesced_graph[meta_path]
-            # 수정한 부분
-            new_g = dgl.add_self_loop(new_g)
-            #
             semantic_embeddings.append(self.gat_layers[0](new_g, h).flatten(1))
         semantic_embeddings = torch.stack(semantic_embeddings, dim=1)  # (N, M, D * K)
 
@@ -63,7 +60,7 @@ class HAN(nn.Module):
         self.layers = nn.ModuleList()
         self.predict = nn.Linear(hidden_size * num_heads, out_size, bias=False).apply(init)
         self.layers.append(
-            HANLayer(meta_paths, in_size, hidden_size, num_heads)
+            HANLayer(meta_paths, in_size, hidden_size, num_heads, dropout)
         )
     def forward(self, g, h):
         for gnn in self.layers:
