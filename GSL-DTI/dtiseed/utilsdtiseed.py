@@ -138,7 +138,7 @@ def load_hetero(network_path):
     protein_disease = np.loadtxt(network_path + 'mat_protein_disease.txt')
     disease_protein = protein_disease.T
 
-    # 수정한 부분
+    # 수정한 부분---------------------------------------------------------
     sp_drug_drug = sparse.csr_matrix(drug_drug)
     sp_drug_chemical = sparse.csr_matrix(drug_chemical)
     sp_drug_disease = sparse.csr_matrix(drug_disease)
@@ -203,7 +203,7 @@ def load_hetero(network_path):
 
     dg = dgl.heterograph(dg_data_dict, num_nodes_dict=num_nodes_dict)
     pg = dgl.heterograph(pg_data_dict, num_nodes_dict=num_nodes_dict)
-    #
+    #------------------------------------------------------------------------
     # d_d = dgl.graph(sparse.csr_matrix(drug_drug), ntype='drug', etype='similarity')
     # num_drug = d_d.number_of_nodes()
     # d_c = dgl.graph(sparse.csr_matrix(drug_chemical), ntype='drug', etype='chemical')
@@ -309,15 +309,15 @@ def load_homo(network_path, dataName):
     # p_p = dgl.graph(sparse.csr_matrix(protein_protein), ntype='protein', etype='similarity')
     # d_p = dgl.bipartite(sparse.csr_matrix(drug_protein), 'drug', 'dp', 'protein')
     # p_d = dgl.bipartite(sparse.csr_matrix(protein_drug), 'protein', 'pd', 'drug')
-    # 수정한 부분 
+    # 수정한 부분 ---------------------------------------------------
     sp_drug_drug = sparse.csr_matrix(drug_drug)
     sp_protein_protein = sparse.csr_matrix(protein_protein)
     sp_drug_protein = sparse.csr_matrix(drug_protein)
     sp_protein_drug = sparse.csr_matrix(protein_drug)
-    #
+    #--------------------------------------------------------------
     # num_drug = d_d.number_of_nodes()
     # num_protein = p_p.number_of_nodes()
-    # 수정한 부분
+    # 수정한 부분---------------------------------------------------
     num_drug = sp_drug_drug.shape[0]
     num_protein = sp_protein_protein.shape[0]
 
@@ -343,13 +343,13 @@ def load_homo(network_path, dataName):
     }
 
     node_counts = {'drug': num_drug, 'protein': num_protein}
-    #
+    #----------------------------------------------------------------
     #dg = dgl.hetero_from_relations([d_d, d_p, p_d])
     # pg = dgl.hetero_from_relations([p_p, p_d, d_p])
-    # 수정한 부분
+    # 수정한 부분----------------------------------------------------
     dg = dgl.heterograph(dg_data_dict, num_nodes_dict=node_counts)
     pg = dgl.heterograph(pg_data_dict, num_nodes_dict=node_counts)
-    #
+    #----------------------------------------------------------------
     graph = [dg, pg]
     whole_positive_index = []
     whole_negative_index = []
@@ -417,7 +417,7 @@ def load_graph(feature_edges, n):
     return nfadj
 
 
-def load_zeng(network_path):
+def load_zeng(network_path): # zheng 데이터셋 사용이 수정 필요, 지금은 수정X
     """
     meta_path of drug
 
