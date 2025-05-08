@@ -108,6 +108,12 @@ for name in ["heter"]: # heter 데이터셋 사용
             best_f1 = 0
             best_roc = 0
             flag = 0
+
+            # 수정한 부분 / 모델 저장을 위한 경로 설정
+            save_dir = dir
+            os.makedirs(save_dir, exist_ok=True)
+            #-----------------------------------
+
             for epoch in tqdm(range(epochs), ncols=85):
                 adjust_learning_rate(optimizer, epoch, lr2, lr3, lr4)
                 loss, train_acc, task1_roc, acc, task1_roc1, task1_pr = train(model, optimizer, train_index, test_index,
@@ -119,6 +125,13 @@ for name in ["heter"]: # heter 데이터셋 사용
                 if task1_roc1 > best_roc:
                     best_roc = task1_roc1
                     flag = epoch
+
+                    # 수정한 부분 / 모델 저장 코드 추가
+                    best_model_path = os.path.join(save_dir, f"{name}_fold{i}_best_roc_model.pt")
+                    torch.save(model.state_dict(), best_model_path)
+                    print(f"\n[Fold {i}] New best ROC model saved to {best_model_path} at epoch {epoch} (ROC: {best_roc:.4f})")
+                    #-----------------------------------------------------------------------------------------------
+
             all_acc.append(best_acc)
             all_roc.append(best_roc)
             all_f1.append(best_f1)

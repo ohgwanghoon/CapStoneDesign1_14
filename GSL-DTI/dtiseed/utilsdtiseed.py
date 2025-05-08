@@ -663,7 +663,7 @@ def get_set(data, split=5):
         set1.append(train_index)
         set2.append(test_index)
     return set1[0].reshape(-1), set2[0].reshape(-1)
-def get_cross(data, split=3):
+def get_cross(data, split=2):
     """
     :param data: dataset and label
     :return:
