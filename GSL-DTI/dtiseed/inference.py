@@ -3,6 +3,7 @@ import numpy as np
 from utilsdtiseed import load_dataset, setup, default_configure
 from modeltestdtiseed import HAN_DTI, MLP, init
 from modeltestdtiseed_part_a import DTI_Model
+import os
 
 # --- 1. 설정 ---
 MODEL_FILE_PATH = "../modelSave_part_a/heter_fold1_best_roc_part_a.pt" # 모델 저장 경로
@@ -85,9 +86,43 @@ with torch.no_grad():
     # LogSoftmax 출력을 확률로 변환
     interaction_probabilities = torch.exp(log_softmax_outputs[:, 1])
 
-    # thresold 기준 이진 예측
-    thresold = 0.5
-    predictions_binary = (interaction_probabilities >= thresold).int()
+    # threshold 기준 이진 예측
+    threshold = 0.5
+    predictions_binary = (interaction_probabilities >= threshold).int()
+
+# --- 4. Top K DTI Score 예측 ---
+print("\nCalculating DTI scores for all possible pairs to find Top 10...")
+
+# 모든 가능한 드러그-단백질 쌍 목록 생성
+all_possible_pairs_list = []
+for i in range(num_nodes_original[0]): # 모든 드러그 인덱스
+    for j in range(num_nodes_original[1]): # 모든 단백질 인덱스
+        all_possible_pairs_list.append((i, j))
+
+all_possible_pairs_tensor = torch.tensor(all_possible_pairs_list, dtype=torch.long).to(DEVICE)
+
+# 모든 가능한 쌍에 대한 예측 점수를 저장할 리스트
+all_pairs_scores_list = []
+
+# 메모리 문제를 피하기 위해 모든 쌍을 배치로 나누어 처리 (선택적이지만 권장)
+batch_size_inference = 1024 # 인퍼런스 시 배치 크기 (시스템 메모리에 맞게 조절)
+with torch.no_grad():
+    for k in range(0, all_possible_pairs_tensor.shape[0], batch_size_inference):
+        batch_pairs = all_possible_pairs_tensor[k : k + batch_size_inference]
+        
+        # 모델 forward 호출 (Simplified_DTI_Model 사용)
+        log_softmax_outputs_batch = model(graph_list_original, initial_node_features_original, batch_pairs)
+        interaction_probabilities_batch = torch.exp(log_softmax_outputs_batch[:, 1]) # 클래스 1 (상호작용) 확률
+        
+        all_pairs_scores_list.extend(zip(batch_pairs.tolist(), interaction_probabilities_batch.tolist()))
+        if (k // batch_size_inference) % 10 == 0 : # 진행 상황 표시 (선택적)
+             print(f"  Processed {k + batch_pairs.shape[0]}/{all_possible_pairs_tensor.shape[0]} pairs...")
+
+# 점수가 높은 순으로 정렬
+all_pairs_scores_list.sort(key=lambda x: x[1], reverse=True)
+
+# 상위 10개 선택
+top_10_dti = all_pairs_scores_list[:10]
 
 # --- 5. 결과 출력 ---
 print("\n--- Prediction Results ---")
@@ -98,3 +133,41 @@ for i in range(dti_pairs_tensor.shape[0]):
     binary_pred = predictions_binary[i].item()
 
     print(f"Pair {drug_idx}, Protein {protein_idx}: \tScore = {score:.4f} \tPredicted Interaction = {'Yes' if binary_pred == 1 else 'No'}")
+
+output_dir = "../inference_result"
+os.makedirs(output_dir, exist_ok=True)
+results_file_path = os.path.join(output_dir, f"dti_prediction.txt")
+top10_file_path = os.path.join(output_dir, f"top10_dti_prediction.txt")
+print(f"\n--- Predicition Results (saving to {results_file_path})")
+
+try:
+    with open(results_file_path, 'w', encoding='utf-8') as f_out:
+        f_out.write("Drug_Index\tProtein_Index\tInteraction_Score\tPredicted_Interaction\n")
+
+        for i in range(dti_pairs_tensor.shape[0]): # dti_pairs_tensor는 예측할 쌍들의 텐서
+            drug_idx = new_dti_pairs_to_predict[i][0] # new_dti_pairs_to_predict는 파이썬 리스트
+            protein_idx = new_dti_pairs_to_predict[i][1]
+            score = interaction_probabilities[i].item() # 해당 쌍의 상호작용 확률 점수
+            
+            # 이진 예측 (임계값 기준)
+            threshold = 0.5 
+            binary_pred_val = 1 if score >= threshold else 0
+            binary_pred_label = 'Yes' if binary_pred_val == 1 else 'No'
+            
+            # 파일에 저장 (탭으로 구분된 형식)
+            f_out.write(f"{drug_idx}\t{protein_idx}\t{score:.4f}\t{binary_pred_label}\n")
+    
+    print(f"\nResults successfully saved to {results_file_path}")
+
+except Exception as e:
+    print(f"Error writing results to file: {e}")
+
+try:
+    with open(top10_file_path, 'w', encoding='utf-8') as f_out:
+        f_out.write("Rank\tDrug_Index\tProtein_Index\tInteraction_Score\n")
+        for rank, ((drug_idx, protein_idx), score) in enumerate(top_10_dti):
+            # 파일에 저장
+            f_out.write(f"{rank+1}\t{drug_idx}\t{protein_idx}\t{score:.4f}\n")
+    print(f"\nTop 10 DTI results successfully saved to {top10_file_path}")
+except Exception as e:
+    print(f"Error writing Top 10 DTI results to file: {e}")
