@@ -4,6 +4,7 @@ import torch
 import esm
 import numpy as np
 import os
+import torch.nn as nn
 
 
 # 약물 임베딩 추출 함수 (입력 데이터도 device로 이동)
@@ -145,6 +146,27 @@ def embed_protein_sequences(input_file: str, output_file: str, batch_size: int =
 
     print(f"Saved {len(embeddings)} embeddings to {output_file}")
 
+#모델 임베딩 차원 조정(MLP 사용)
+class FeatureAlignMLP(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dims=None):
+        super(FeatureAlignMLP, self).__init__()
+        
+        if hidden_dims is None:
+            hidden_dims = [max(input_dim, output_dim)]  # 기본: 입력 또는 출력 중 더 큰 차원 하나의 은닉층
+
+        layers = []
+        prev_dim = input_dim
+        for h_dim in hidden_dims:
+            layers.append(nn.Linear(prev_dim, h_dim))
+            layers.append(nn.ReLU())
+            prev_dim = h_dim
+        
+        layers.append(nn.Linear(prev_dim, output_dim))  # 최종 출력 차원 맞추기
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
 
 # 예시 실행; make protein initial embeddings
 # prot_input_file = "../data/heter/protein_seq.txt"
