@@ -1,3 +1,7 @@
+# 주의!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# esm 코드는 기존의 라이브러리 환경에서 안돌아간다. 새로운 가상환경에서 더 높은 버전의 pytorch를 설치해야한다.
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 import pandas as pd
 from transformers import RobertaTokenizer, RobertaModel
 import torch
@@ -52,17 +56,21 @@ def get_drug_chemBERTa_embedding():
     drug_embeddings = get_drug_embeddings(smiles_list, method="cls")
 
     # 4. 임베딩을 텍스트 파일로 저장
+    drug_embeddings_cpu = drug_embeddings.cpu()
     drug_embeddings_np = drug_embeddings.cpu().numpy()  # 반드시 CPU로 이동 후 numpy 변환
 
     # 5. 결과 파일 경로
-    output_file = "../init_embeddings/drug_chemBERTa_embeddings.txt"
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    with open(output_file, "w") as f:
+    output_txt_file = "../init_embeddings/drug_chemBERTa_embeddings.txt"
+    output_pt_file = "../init_embeddings/drug_chemBERTa_embeddings.pt"
+    os.makedirs(os.path.dirname(output_txt_file), exist_ok=True)
+    with open(output_txt_file, "w") as f:
         for emb in drug_embeddings_np:
             emb_str = " ".join(map(str, emb))
             f.write(emb_str + "\n")
 
-    print(f"임베딩을 '{output_file}'에 저장했습니다.")
+    torch.save(drug_embeddings_cpu, output_pt_file)
+
+    print(f"임베딩을 '{output_txt_file}' 및 '{output_pt_file}'에 저장했습니다.")
 
 # 단백질 임베딩 추출 함수
 # output shape: (number of proteins) * (모델에 따라 달라짐. 아래 참조)
@@ -138,40 +146,24 @@ def embed_protein_sequences(input_file: str, output_file: str, batch_size: int =
 
         print(f"Processed batch {i // batch_size + 1}/{(len(sequences) + batch_size - 1) // batch_size}")
 
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    with open(output_file, "w") as f:
+    # 1. 텍스트로 저장
+    with open(output_file, "w") as f_txt:
         for emb in embeddings:
-            emb_str = " ".join(map(str, emb))
-            f.write(f"{emb_str}\n")
+            emb_str = " ".join(map(str, emb.tolist()))
+            f_txt.write(f"{emb_str}\n")
 
-    print(f"Saved {len(embeddings)} embeddings to {output_file}")
+    # 2. PyTorch tensor로 저장
+    output_pt_file = output_file.replace(".txt", ".pt")
+    tensor_embeddings = torch.stack([torch.tensor(e) for e in embeddings])
+    torch.save(tensor_embeddings, output_pt_file)
 
-#모델 임베딩 차원 조정(MLP 사용)
-class FeatureAlignMLP(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dims=None):
-        super(FeatureAlignMLP, self).__init__()
-        
-        if hidden_dims is None:
-            hidden_dims = [max(input_dim, output_dim)]  # 기본: 입력 또는 출력 중 더 큰 차원 하나의 은닉층
+    print(f"Saved {len(embeddings)} embeddings to '{output_file}' (txt) and '{output_pt_file}' (pt)")
 
-        layers = []
-        prev_dim = input_dim
-        for h_dim in hidden_dims:
-            layers.append(nn.Linear(prev_dim, h_dim))
-            layers.append(nn.ReLU())
-            prev_dim = h_dim
-        
-        layers.append(nn.Linear(prev_dim, output_dim))  # 최종 출력 차원 맞추기
-
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.model(x)
-
-# 예시 실행; make protein initial embeddings
-# prot_input_file = "../data/heter/protein_seq.txt"
-# prot_output_file = "../init_embeddings/protein_esm_embeddings.txt"
-# embed_protein_sequences(prot_input_file, prot_output_file)
-
+# 예시 실행
 # make drug initial embeddings
 get_drug_chemBERTa_embedding()
+# make protein initial embeddings
+prot_input_file = "../data/heter/protein_seq.txt"
+prot_output_file = "../init_embeddings/protein_esm_embeddings.txt"
+embed_protein_sequences(prot_input_file, prot_output_file)
+
