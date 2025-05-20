@@ -47,7 +47,7 @@ hd_in_size = in_size_initial
 hp_in_size = in_size_initial
 
 # 초기 임베딩 플래그
-init_feature_flag = 0
+init_feature_flag = 2
 
 if init_feature_flag == 0 :
     hd = torch.randn((num_nodes[0], hd_in_size)) # num_nodes[0] = num_drug
@@ -61,8 +61,8 @@ elif init_feature_flag == 1:
 elif init_feature_flag == 2:
     # TODO Similarity 사용
     # torch.Tensor 형태로 받아야 함!
-    hd = torch.zeros((num_nodes[0], hd_in_size))
-    hp = torch.zeros((num_nodes[1], hp_in_size))
+    hd = torch.load("../data/heter/drug_embedding_mlp.pt")
+    hp = torch.load("../data/heter/protein_embedding_mlp.pt")
     print("Similarity")
 
 
