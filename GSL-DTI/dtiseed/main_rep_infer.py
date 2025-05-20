@@ -219,6 +219,8 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
                     best_test_f1 = f1_score(test_labels_np, predicted_labels_np)
                     best_test_acc = accuracy
                     best_epoch = epoch
+                    # 모델 저장
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
 
                     if epoch>100:
                         #drug, protein representation 저장
