@@ -1,38 +1,106 @@
 import matplotlib.pyplot as plt
 import pickle
 import os
-from sklearn.metrics import roc_curve, precision_recall_curve, auc
+import numpy as np
+from sklearn.metrics import f1_score, accuracy_score
 
-save_dir = "../modelSave_part_a"
-dataset_name = "heter" # 또는 "Es" 등 원하는 데이터셋 이름
-history_file_path = os.path.join(save_dir, f"{dataset_name}_all_folds_history.pkl")
+# --- 1. 설정 ---
+save_dir = "../modelSave_rep_infer"
+dataset_name = "heter"
 
-loaded_history = None
-with open(history_file_path, 'rb') as f:
-    loaded_history = pickle.load(f)
+# 비교할 초기 임베딩 방식 및 파일 정보
+embedding_experiments = [
+    {"suffix": "original", "label": "Random Init", "color": "blue", "linestyle": "-"},
+    {"suffix": "pretrained", "label": "Pretrained Init", "color": "green", "linestyle": "--"},
+    {"suffix": "similarity", "label": "Similarity Init", "color": "red", "linestyle": "-."},
+    {"suffix": "autoencoder", "label": "Autoencoder Init", "color": "purple", "linestyle": ":"}
+]
+# 각 실험별 fold_1 데이터를 저장할 딕셔너리
+all_experiments_fold1_data = {}
 
-if loaded_history and "fold_1" in loaded_history:
-    fold_data = loaded_history["fold_3"]
-    plt.figure(figsize=(10, 4))
-    plt.subplot(1, 2, 1)
-    plt.plot(fold_data['epochs'], fold_data['train_loss'], label='Train Loss')
-    plt.plot(fold_data['epochs'], fold_data['test_loss'], label='Test Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Fold 1: Loss Curve')
+# --- 2. 각 실험 결과(.pkl 파일) 로드 및 fold_1 데이터 추출 ---
+for exp_info in embedding_experiments:
+    history_file_path = os.path.join(save_dir, f"{dataset_name}_all_folds_history_{exp_info['suffix']}.pkl")
+    loaded_history = None
+    try:
+        with open(history_file_path, 'rb') as f:
+            loaded_history = pickle.load(f)
+        print(f"Successfully loaded history from: {history_file_path}")
 
-    # 예시: 첫 번째 fold의 ROC/PR 커브를 위한 데이터 (마지막 평가 시점)
-    test_labels_f1 = fold_data['test_true_labels'][-1] # 마지막 평가 시점의 레이블
-    test_scores_f1 = fold_data['test_pred_scores'][-1] # 마지막 평가 시점의 점수
+        if loaded_history and "fold_1" in loaded_history:
+            fold_data = loaded_history["fold_1"]
+            # F1과 Accuracy를 매 에폭마다 재계산 (저장된 true_labels와 pred_scores 사용)
+            # fold_data에 'test_acc'와 'test_f1' 키가 없다면 새로 생성
+            if 'test_acc' not in fold_data or 'test_f1' not in fold_data:
+                fold_data['test_acc'] = []
+                fold_data['test_f1'] = []
+                if fold_data.get('test_true_labels') and fold_data.get('test_pred_scores'):
+                    for true_labels, pred_scores in zip(fold_data['test_true_labels'], fold_data['test_pred_scores']):
+                        # 확률 점수를 이진 클래스로 변환 (임계값 0.5 사용)
+                        threshold = 0.5
+                        pred_classes = (np.array(pred_scores) >= threshold).astype(int)
+                        
+                        acc = accuracy_score(true_labels, pred_classes)
+                        f1 = f1_score(true_labels, pred_classes, zero_division=0)
+                        fold_data['test_acc'].append(acc)
+                        fold_data['test_f1'].append(f1)
+                else:
+                    print(f"Warning: Missing 'test_true_labels' or 'test_pred_scores' for {exp_info['label']} to calculate Acc/F1.")
 
-    fpr, tpr, _ = roc_curve(test_labels_f1, test_scores_f1)
-    roc_auc = auc(fpr, tpr)
-    plt.subplot(1, 2, 2)
-    plt.plot(fpr, tpr, label=f'ROC curve (area = {roc_auc:.2f})')
-    plt.plot([0, 1], [0, 1], 'k--')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Fold 1: ROC Curve (Last Eval)')
-    plt.legend(loc="lower right")
-    plt.show()
+            all_experiments_fold1_data[exp_info['label']] = fold_data
+        else:
+            print(f"Warning: 'fold_1' data not found in {history_file_path}")
+            all_experiments_fold1_data[exp_info['label']] = None # 데이터 없음을 표시
+
+    except FileNotFoundError:
+        print(f"INFO: History file not found (skipping): {history_file_path}")
+        all_experiments_fold1_data[exp_info['label']] = None
+    except Exception as e:
+        print(f"Error loading or processing file {history_file_path}: {e}")
+        all_experiments_fold1_data[exp_info['label']] = None
+
+# --- 3. 6개의 그래프 생성 ---
+if not any(all_experiments_fold1_data.values()): # 로드된 데이터가 하나도 없으면 종료
+    print("No data loaded for any experiment. Exiting plot generation.")
+    exit()
+
+fig, axs = plt.subplots(3, 2, figsize=(15, 18)) # 3행 2열의 subplot, 전체 그림 크기 조절
+fig.suptitle(f'{dataset_name.upper()} Dataset: Fold 1 Performance Comparison by Initial Embedding', fontsize=18, y=1.00)
+
+plot_metrics = [
+    ('train_loss', 'Train Loss'),
+    ('test_loss', 'Test Loss'),
+    ('test_roc', 'Test AUROC'),
+    ('test_pr', 'Test AUPR'),
+    ('test_acc', 'Test Accuracy'), # 새로 계산된 값 사용
+    ('test_f1', 'Test F1-Score')   # 새로 계산된 값 사용
+]
+
+# 각 subplot 위치 (axs는 2D 배열이므로 평탄화하여 사용)
+ax_flat = axs.flatten()
+
+for idx, (metric_key, metric_label) in enumerate(plot_metrics):
+    current_ax = ax_flat[idx]
+    for exp_info in embedding_experiments:
+        exp_label = exp_info['label']
+        fold_data = all_experiments_fold1_data.get(exp_label)
+
+        if fold_data and fold_data.get('epochs') and fold_data.get(metric_key) and len(fold_data['epochs']) == len(fold_data[metric_key]):
+            current_ax.plot(fold_data['epochs'], fold_data[metric_key],
+                            label=exp_label, color=exp_info['color'], linestyle=exp_info['linestyle'],
+                            marker='.', markersize=4, alpha=0.8)
+        elif fold_data: # 데이터는 로드되었으나 해당 메트릭이 없거나 길이가 안맞는 경우
+             print(f"Warning: Data for metric '{metric_key}' incomplete or missing for '{exp_label}'. Skipping plot for this metric.")
+
+
+    # current_ax.set_xlabel('Epochs')
+    current_ax.set_ylabel(metric_label)
+    current_ax.set_title(f'{metric_label} Curve')
+    current_ax.legend(fontsize='small')
+    current_ax.grid(True)
+
+# 사용되지 않은 subplot이 있다면 숨기기 (만약 plot_metrics 개수보다 subplot이 많다면)
+for i in range(len(plot_metrics), len(ax_flat)):
+    fig.delaxes(ax_flat[i])
+
+plt.show()
