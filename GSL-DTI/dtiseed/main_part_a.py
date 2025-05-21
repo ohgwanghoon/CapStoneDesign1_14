@@ -52,6 +52,7 @@ init_feature_flag = 0
 if init_feature_flag == 0 :
     hd = torch.randn((num_nodes[0], hd_in_size)) # num_nodes[0] = num_drug
     hp = torch.randn((num_nodes[1], hp_in_size)) # num_nodes[1] = num_protein
+    print("randomly feature initiation")
 elif init_feature_flag == 1:
     # TODO Pretrained 사용
     # torch.Tensor 형태로 받아야 함!

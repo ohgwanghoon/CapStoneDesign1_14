@@ -145,7 +145,7 @@ for name in ["heter"]: # heter 데이터셋 사용
         model.train()
         out, d, p = model(graph, node_feature, train_index, data)
 
-        train_acc = (out.argmax(dim=1) == label[train_index].reshape(-1)).sum(dtype=float) / len(train_index)
+        train_acc = (out.argmax(dim=1) == label[train_index].reshape(-1)).sum(dtype=float) / len(train_index) # out의 feature 중 큰것의 index를 예측값으로 함. 만약 큰 것의 index가 0이면 negative, 1이면 positive
 
         task1_roc = get_roc(out, label[train_index])
 
