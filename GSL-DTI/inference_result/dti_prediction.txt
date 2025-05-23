@@ -1,6 +1,0 @@
-Drug_Index	Protein_Index	Interaction_Score	Predicted_Interaction
-10	20	0.5141	Yes
-15	30	0.4599	No
-0	106	0.5277	Yes
-0	105	0.5782	Yes
-707	1511	0.4603	No
