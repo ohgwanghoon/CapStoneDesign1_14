@@ -245,36 +245,38 @@ def load_hetero(network_path):
 
     data_set = np.zeros((len(negative_sample_index) +  len(train_positive_index), 3),
                         dtype=int)
-    count = 0
+    # dti_cledge.txt, dti_index.txt, dtiedge.txt 생성 코드------------------------------------
+    # count = 0
 
-    for i in train_positive_index:
-        data_set[count][0] = i[0]
-        data_set[count][1] = i[1]
-        data_set[count][2] = 1
-        count += 1
-    f = open("dti_cledge.txt", "w", encoding="utf-8")
+    # for i in train_positive_index:
+    #     data_set[count][0] = i[0]
+    #     data_set[count][1] = i[1]
+    #     data_set[count][2] = 1
+    #     count += 1
+    # f = open("dti_cledge.txt", "w", encoding="utf-8")
 
-    for i in range(count):
-        for j in range(count):
-            if data_set[i][0] == data_set[j][0] or data_set[i][1] == data_set[j][1]:
-                f.write(f"{i}\t{j}\n")
+    # for i in range(count):
+    #     for j in range(count):
+    #         if data_set[i][0] == data_set[j][0] or data_set[i][1] == data_set[j][1]:
+    #             f.write(f"{i}\t{j}\n")
 
-    for i in range(len(negative_sample_index)):
-        data_set[count][0] = whole_negative_index[negative_sample_index[i]][0]
-        data_set[count][1] = whole_negative_index[negative_sample_index[i]][1]
-        data_set[count][2] = 0
-        count += 1
-    f = open(f"dti_index.txt", "w", encoding="utf-8")
-    for i in data_set:
-        f.write(f"{i[0]}\t{i[1]}\t{i[2]}\n")
+    # for i in range(len(negative_sample_index)):
+    #     data_set[count][0] = whole_negative_index[negative_sample_index[i]][0]
+    #     data_set[count][1] = whole_negative_index[negative_sample_index[i]][1]
+    #     data_set[count][2] = 0
+    #     count += 1
+    # f = open(f"dti_index.txt", "w", encoding="utf-8")
+    # for i in data_set:
+    #     f.write(f"{i[0]}\t{i[1]}\t{i[2]}\n")
 
-    dateset = data_set
-    f = open("dtiedge.txt", "w", encoding="utf-8")
-    for i in range(dateset.shape[0]):
-        for j in range(i, dateset.shape[0]):
-            if dateset[i][0] == dateset[j][0] or dateset[i][1] == dateset[j][1]:
-                f.write(f"{i}\t{j}\n")
-    f.close()
+    # dateset = data_set
+    # f = open("dtiedge.txt", "w", encoding="utf-8")
+    # for i in range(dateset.shape[0]):
+    #     for j in range(i, dateset.shape[0]):
+    #         if dateset[i][0] == dateset[j][0] or dateset[i][1] == dateset[j][1]:
+    #             f.write(f"{i}\t{j}\n")
+    # f.close()
+    #---------------------------------------------------------------------------------------
     # print('hetero dataset loaded')
     #
     # print(f"drug set size is {len(drug_drug)}")
@@ -292,7 +294,7 @@ def load_hetero(network_path):
     node_num = [num_drug, num_protein]
     all_meta_paths = [[['similarity'], ["chemical"], ['dse', 'sed'], ['ddi', 'did'], ['ddp', 'pdd']],
                       [['similarity'], ["sequence"], ['pdi', 'dip'], ['pdd', 'ddp']]]
-    return dateset, graph, node_num, all_meta_paths
+    return data_set, graph, node_num, all_meta_paths
 
 
 def load_homo(network_path, dataName):

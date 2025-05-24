@@ -22,11 +22,12 @@ han_out_size = 128     # 최종 Drug/Protein 표현 벡터 차원
 dropout_han = 0.5      # HAN 모듈에 전달할 dropout 값 (HAN 내부에서 사용되지 않는다면 0)
 learning_rate = 1e-5  # 모델 학습률
 weight_decay = 1e-4 # l2 정규화 가중치
-epochs = 2300       # 에포크 수
+epochs = 1000      # 에포크 수
 mlp_input_dim_val = han_out_size * 2 # drug 임베딩 + protein 임베딩 차원
 
 args['device'] = "cuda:0" if torch.cuda.is_available() else "cpu"
-save_dir = "../modelSave_rep_infer"
+# save_dir = "../modelSave_rep_infer"
+save_dir = "../result"
 os.makedirs(save_dir, exist_ok=True)
 
 # --- 사용할 데이터셋 선택 ---
@@ -43,19 +44,22 @@ hd_in_size = in_size_initial
 hp_in_size = in_size_initial
 
 # 초기 임베딩 플래그
-init_feature_flag = 3
+init_feature_flag = 0
 init_dim_change = False # 초기 임베딩 바뀌는지 여부
 
 if init_feature_flag == 0 :
-    hd = torch.randn((num_nodes[0], hd_in_size)) # num_nodes[0] = num_drug
-    hp = torch.randn((num_nodes[1], hp_in_size)) # num_nodes[1] = num_protein
+    # hd = torch.randn((num_nodes[0], hd_in_size)) # num_nodes[0] = num_drug
+    # hp = torch.randn((num_nodes[1], hp_in_size)) # num_nodes[1] = num_protein
+    # 랜덤 초기 임베딩 불러오는 방식으로 변경
+    hd = torch.load("../init_feature/drug_embedding_random.pt")
+    hp = torch.load("../init_feature/protein_embedding_random.pt")
     print("randomly feature initiation")
     hd_f_dim = hd.shape[1]
     hp_f_dim = hp.shape[1]
 elif init_feature_flag == 1:
     init_dim_change = True
-    hd = torch.load("../init_embeddings/drug_chemBERTa_embeddings.pt")
-    hp = torch.load("../init_embeddings/protein_esm_embeddings.pt")
+    hd = torch.load("../init_feature/drug_chemBERTa_embeddings.pt")
+    hp = torch.load("../init_feature/protein_esm_embeddings.pt")
     #정규화
     hd = (hd - hd.mean(axis=0)) / hd.std(axis=0)
     hp = (hp - hp.mean(axis=0)) / hp.std(axis=0)
@@ -80,9 +84,9 @@ elif init_feature_flag == 2:
     print("Similarity")
 elif init_feature_flag == 3:
     init_dim_change = False
-    d_sim_mat_file_path = '../data/heter/drug_embedding_autoencoder.pt'
+    d_sim_mat_file_path = '../init_feature/drug_embedding_autoencoder.pt'
     hd = torch.load(d_sim_mat_file_path)
-    p_sim_mat_file_path = '../data/heter/protein_embedding_autoencoder.pt'
+    p_sim_mat_file_path = '../init_feature/protein_embedding_autoencoder.pt'
     hp = torch.load(p_sim_mat_file_path)
     #정규화
     hd = (hd - hd.mean(axis=0)) / hd.std(axis=0)
@@ -169,6 +173,7 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
 
     best_test_roc = 0
     best_test_pr = 0
+    best_test_loss = float('inf')
 
     for epoch in tqdm(range(epochs), desc=f"Fold {fold+1} Training"):
         model.train() # 학습 모드
@@ -212,7 +217,7 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
 
                 # if current_test_roc > best_test_roc:
                 #     best_test_roc = current_test_roc
-                if current_test_pr > best_test_pr: # 최고 성능일 때 모델 저장, 성능 지표 저장. 클래스 불균형(negative 수 >>> positive 수)일때 PR이 더 효과적
+                if current_test_loss < best_test_loss: # 최고 성능일 때 모델 저장, 성능 지표 저장. 클래스 불균형(negative 수 >>> positive 수)일때 PR이 더 효과적
                     
                     #accuracy 계산
                     predicted_labels = (probabilities_class1 >= 0.5).long()
@@ -227,13 +232,29 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
                     best_test_pr = current_test_pr
                     best_test_f1 = f1_score(test_labels_np, predicted_labels_np)
                     best_test_acc = accuracy
-                    best_epoch = epoch
+                    best_test_loss = current_test_loss
+                    best_epoch = epoch + 1
                     # 모델 저장
-                    torch.save(model.state_dict(), os.path.join(save_dir, f"{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
+                    if init_feature_flag == 0:
+                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/random/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
+                    elif init_feature_flag == 1:
+                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/pretrained/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
+                    elif init_feature_flag == 2:
+                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/similarity/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
+                    elif init_feature_flag == 3:
+                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/autoencoder/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
+                   
 
                     if epoch>100:
                         #drug, protein representation 저장
-                        repr_dir = "../representaion_dp"
+                        if init_feature_flag == 0:
+                            repr_dir = "../result/drug_protein_embed/random"
+                        elif init_feature_flag == 1:
+                            repr_dir = "../result/drug_protein_embed/pretrained"
+                        elif init_feature_flag == 2:
+                            repr_dir = "../result/drug_protein_embed/similarity"
+                        elif init_feature_flag == 3:
+                            repr_dir = "../result/drug_protein_embed/autoencoder"
                         os.makedirs(repr_dir, exist_ok=True)
                         #후속 파이프라인 모델 이용
                         torch.save(drug_repr, os.path.join(repr_dir, f"drug_repr_fold{fold+1}.pt"))
@@ -254,14 +275,15 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
     best_fold_history['test_f1'].append(best_test_f1)
 
     all_folds_history[f"fold_{fold+1}"] = fold_history
+
 if init_feature_flag == 0:
-    history_file_path = os.path.join(save_dir, f"{dataset_name}_all_folds_history_original.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/random/{dataset_name}_all_folds_history_original.pkl")
 elif init_feature_flag == 1:
-    history_file_path = os.path.join(save_dir, f"{dataset_name}_all_folds_history_pretrained.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/pretrained/{dataset_name}_all_folds_history_pretrained.pkl")
 elif init_feature_flag == 2:
-    history_file_path = os.path.join(save_dir, f"{dataset_name}_all_folds_history_similarity.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/similarity/{dataset_name}_all_folds_history_similarity.pkl")
 elif init_feature_flag == 3:
-    history_file_path = os.path.join(save_dir, f"{dataset_name}_all_folds_history_autoencoder.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/autoencoder/{dataset_name}_all_folds_history_autoencoder.pkl")
 
 try:
     with open(history_file_path, 'wb') as f:

@@ -53,8 +53,8 @@ def train_autoencoder(data: np.ndarray, input_dim: int, save_path: str):
 # =========================
 # 데이터 불러오기 및 실행
 # =========================
-drug_sim = np.loadtxt("../data/heter/Similarity_Matrix_Drugs.txt")
-prot_sim = np.loadtxt("../data/heter/Similarity_Matrix_Proteins.txt")
+drug_sim = np.loadtxt("../../data/heter/Similarity_Matrix_Drugs.txt")
+prot_sim = np.loadtxt("../../data/heter/Similarity_Matrix_Proteins.txt")
 
-train_autoencoder(drug_sim, input_dim=708, save_path="../data/heter/drug_embedding_autoencoder.pt")
-train_autoencoder(prot_sim, input_dim=1512, save_path="../data/heter/protein_embedding_autoencoder.pt")
+train_autoencoder(drug_sim, input_dim=708, save_path="../../init_feature/drug_embedding_autoencoder.pt")
+train_autoencoder(prot_sim, input_dim=1512, save_path="../../init_feature/protein_embedding_autoencoder.pt")

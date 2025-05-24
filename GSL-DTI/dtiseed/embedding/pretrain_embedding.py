@@ -48,7 +48,7 @@ def get_drug_chemBERTa_embedding():
     print(f"Using device: {device}")
 
     # 2. CSV 파일에서 SMILES 읽기
-    csv_file_path = "../data/heter/drug_smiles.csv"  # 실제 경로 확인 필요
+    csv_file_path = "../../data/heter/drug_smiles.csv"  # 실제 경로 확인 필요
     df = pd.read_csv(csv_file_path)
     smiles_list = df['smiles'].tolist()
 
@@ -60,8 +60,8 @@ def get_drug_chemBERTa_embedding():
     drug_embeddings_np = drug_embeddings.cpu().numpy()  # 반드시 CPU로 이동 후 numpy 변환
 
     # 5. 결과 파일 경로
-    output_txt_file = "../init_embeddings/drug_chemBERTa_embeddings.txt"
-    output_pt_file = "../init_embeddings/drug_chemBERTa_embeddings.pt"
+    output_txt_file = "../../init_feature/drug_chemBERTa_embeddings.txt"
+    output_pt_file = "../../init_feature/drug_chemBERTa_embeddings.pt"
     os.makedirs(os.path.dirname(output_txt_file), exist_ok=True)
     with open(output_txt_file, "w") as f:
         for emb in drug_embeddings_np:
@@ -163,7 +163,7 @@ def embed_protein_sequences(input_file: str, output_file: str, batch_size: int =
 # make drug initial embeddings
 get_drug_chemBERTa_embedding()
 # make protein initial embeddings
-prot_input_file = "../data/heter/protein_seq.txt"
-prot_output_file = "../init_embeddings/protein_esm_embeddings.txt"
+prot_input_file = "../../data/heter/protein_seq.txt"
+prot_output_file = "../../init_feature/protein_esm_embeddings.txt"
 embed_protein_sequences(prot_input_file, prot_output_file)
 
