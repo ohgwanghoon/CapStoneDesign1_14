@@ -10,6 +10,7 @@ import warnings
 import os
 from sklearn.model_selection import StratifiedKFold
 import pickle
+import time
 
 warnings.filterwarnings("ignore")
 seed = 47
@@ -21,12 +22,14 @@ han_hidden_size = 256 # HAN 내부 GNN의 hidden 차원
 han_out_size = 128     # 최종 Drug/Protein 표현 벡터 차원
 dropout_han = 0.5      # HAN 모듈에 전달할 dropout 값 (HAN 내부에서 사용되지 않는다면 0)
 learning_rate = 1e-5  # 모델 학습률
+# 학습률 다르게 설정하는 부분
+# lr1 = 1e-6
+# lr2 = 5e-4
 weight_decay = 1e-4 # l2 정규화 가중치
-epochs = 1000      # 에포크 수
+epochs = 2500     # 에포크 수
 mlp_input_dim_val = han_out_size * 2 # drug 임베딩 + protein 임베딩 차원
 
 args['device'] = "cuda:0" if torch.cuda.is_available() else "cpu"
-# save_dir = "../modelSave_rep_infer"
 save_dir = "../result"
 os.makedirs(save_dir, exist_ok=True)
 
@@ -44,7 +47,7 @@ hd_in_size = in_size_initial
 hp_in_size = in_size_initial
 
 # 초기 임베딩 플래그
-init_feature_flag = 0
+init_feature_flag = 3
 init_dim_change = False # 초기 임베딩 바뀌는지 여부
 
 if init_feature_flag == 0 :
@@ -129,10 +132,19 @@ best_fold_history = {
     'test_f1' : []
 }
 
+best_fold_num = 0
+best_fold_loss = float('inf')
+
 # 모든 fold의 결과를 저장할 딕셔너리
 all_folds_history = {} # key : fold 번호, value : 해당 fold의 epoch 별 기록 딕셔너리
 
+# 조기 종료를 위한 파라마티
+patience = 10
+
+overall_start_time = time.time()
+
 for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices, dtidata[:, 2])):
+    fold_start_time = time.time()
     print(f"\n--- Fold {fold+1}/{n_splits} ---")
 
     # 현재 fold의 train/test용 상호작용 pair 인덱스 및 label 선택
@@ -158,6 +170,14 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
+    # 학습률을 다르게 설정했다면 주석 해제
+    # optimizer = torch.optim.Adam([
+    #     {"params": model.han_dti.parameters(), "lr": lr1},
+    #     {"params": model.mlp.parameters(), "lr": lr2},
+    #     ],
+    #     weight_decay=weight_decay
+    #     )
+
     fold_history = {
         'epochs': [],
         'train_loss': [],
@@ -171,11 +191,15 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
         'test_pred_scores': [], # 모델의 예측 확률(점수) 리스트 (상호작용한다에 대한)
     }
 
+    # 조기 종료 및 최고 성능 모델 저장 관련 변수 초기화
+    current_patience = 0
+
     best_test_roc = 0
     best_test_pr = 0
     best_test_loss = float('inf')
 
     for epoch in tqdm(range(epochs), desc=f"Fold {fold+1} Training"):
+        # adjust_learning_rate(optimizer, epoch, lr2, lr3, lr4)
         model.train() # 학습 모드
         optimizer.zero_grad()
 
@@ -187,86 +211,95 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
         optimizer.step()
 
         # 에포크마다 테스트 성능 평가 - 성능 개선 확인용
-        if (epoch + 1) % 10 == 0: # 10 에포크마다 평가
-            model.eval()
-            with torch.no_grad():
-                # train accuracy 계산
-                train_pred = train_outputs.argmax(dim=1)
-                current_train_acc = (train_pred == train_labels_fold).float().mean().item()
+        model.eval()
+        with torch.no_grad():
+            # train accuracy 계산
+            train_pred = train_outputs.argmax(dim=1)
+            current_train_acc = (train_pred == train_labels_fold).float().mean().item()
 
-                fold_history['epochs'].append(epoch + 1)
-                fold_history['train_loss'].append(current_train_loss.item())
-                fold_history['train_acc'].append(current_train_acc)
+            fold_history['epochs'].append(epoch + 1)
+            fold_history['train_loss'].append(current_train_loss.item())
+            fold_history['train_acc'].append(current_train_acc)
 
                 # test output, loss 계산.
-                test_outputs = model(graph_list, None, 'test', test_pairs_fold, drug_repr, protein_repr)
-                current_test_loss = criterion(test_outputs, test_labels_fold)
+            test_outputs = model(graph_list, None, 'test', test_pairs_fold, drug_repr, protein_repr)
+            current_test_loss = criterion(test_outputs, test_labels_fold)
                 # ROC, PR 계산
-                current_test_roc = get_roc(test_outputs, test_labels_fold)#ROC-AUC
-                current_test_pr = get_pr(test_outputs, test_labels_fold)#AUPR
+            current_test_roc = get_roc(test_outputs, test_labels_fold)#ROC-AUC
+            current_test_pr = get_pr(test_outputs, test_labels_fold)#AUPR
+            test_pred = test_outputs.argmax(dim=1)
+            current_test_acc = (test_pred == test_labels_fold).float().mean().item()
 
-                fold_history['test_loss'].append(current_test_loss.item())
-                fold_history['test_roc'].append(current_test_roc)
-                fold_history['test_pr'].append(current_test_pr)
+            fold_history['test_loss'].append(current_test_loss.item())
+            fold_history['test_roc'].append(current_test_roc)
+            fold_history['test_pr'].append(current_test_pr)
+            fold_history['test_acc'].append(current_test_acc)
 
-                probabilities_class1 = torch.exp(test_outputs[:, 1]) # positive일 확률
-                fold_history['test_true_labels'].append(test_labels_fold.cpu().numpy())
-                fold_history['test_pred_scores'].append(probabilities_class1.cpu().numpy())
+            probabilities_class1 = torch.exp(test_outputs[:, 1]) # positive일 확률
+            fold_history['test_true_labels'].append(test_labels_fold.cpu().numpy())
+            fold_history['test_pred_scores'].append(probabilities_class1.cpu().numpy())
 
-                print(f"\nEpoch {epoch+1}: Train Acc: {current_train_acc:.4f}, Test Loss: {current_test_loss.item():.4f}, Test ROC: {current_test_roc:.4f}, Test PR: {current_test_pr:.4f}")
+            print(f"\nEpoch {epoch+1}: Train Acc: {current_train_acc:.4f}, Test Loss: {current_test_loss.item():.4f}, Test ROC: {current_test_roc:.4f}, Test PR: {current_test_pr:.4f}")
 
-                # if current_test_roc > best_test_roc:
-                #     best_test_roc = current_test_roc
-                if current_test_loss < best_test_loss: # 최고 성능일 때 모델 저장, 성능 지표 저장. 클래스 불균형(negative 수 >>> positive 수)일때 PR이 더 효과적
+            # if current_test_roc > best_test_roc:
+            #     best_test_roc = current_test_roc
+            if current_test_loss < best_test_loss: # 최고 성능일 때 모델 저장, loss 기준
                     
-                    #accuracy 계산
-                    predicted_labels = (probabilities_class1 >= 0.5).long()
-                    correct = (predicted_labels == test_labels_fold).sum().item()
-                    total = test_labels_fold.size(0)
-                    accuracy = correct / total
-                    # F1 score 계산
-                    predicted_labels_np = predicted_labels.cpu().numpy()
-                    test_labels_np = test_labels_fold.cpu().numpy()
-                    # AUPR 최고일 때 성능지표
-                    best_test_roc = current_test_roc
-                    best_test_pr = current_test_pr
-                    best_test_f1 = f1_score(test_labels_np, predicted_labels_np)
-                    best_test_acc = accuracy
-                    best_test_loss = current_test_loss
-                    best_epoch = epoch + 1
-                    # 모델 저장
-                    if init_feature_flag == 0:
-                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/random/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
-                    elif init_feature_flag == 1:
-                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/pretrained/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
-                    elif init_feature_flag == 2:
-                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/similarity/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
-                    elif init_feature_flag == 3:
-                        torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/autoencoder/{dataset_name}_fold{fold+1}_best_AUPR_modelWeight.pt"))
+                #accuracy 계산
+                predicted_labels = (probabilities_class1 >= 0.5).long()
+                correct = (predicted_labels == test_labels_fold).sum().item()
+                total = test_labels_fold.size(0)
+                accuracy = correct / total
+                # F1 score 계산
+                predicted_labels_np = predicted_labels.cpu().numpy()
+                test_labels_np = test_labels_fold.cpu().numpy()
+                # 최저 loss일 때 성능지표
+                best_test_roc = current_test_roc
+                best_test_pr = current_test_pr
+                best_test_f1 = f1_score(test_labels_np, predicted_labels_np)
+                best_test_acc = accuracy
+                best_test_loss = current_test_loss
+                best_epoch = epoch + 1
+                # 모델 저장
+                if init_feature_flag == 0:
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/random/{dataset_name}_fold{fold+1}_best_loss_modelWeight.pt"))
+                elif init_feature_flag == 1:
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/pretrained/{dataset_name}_fold{fold+1}_best_loss_modelWeight.pt"))
+                elif init_feature_flag == 2:
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/similarity/{dataset_name}_fold{fold+1}_best_loss_modelWeight.pt"))
+                elif init_feature_flag == 3:
+                    torch.save(model.state_dict(), os.path.join(save_dir, f"trained_weight/auto_encoder/{dataset_name}_fold{fold+1}_best_loss_modelWeight.pt"))
                    
-
-                    if epoch>100:
-                        #drug, protein representation 저장
-                        if init_feature_flag == 0:
-                            repr_dir = "../result/drug_protein_embed/random"
-                        elif init_feature_flag == 1:
-                            repr_dir = "../result/drug_protein_embed/pretrained"
-                        elif init_feature_flag == 2:
-                            repr_dir = "../result/drug_protein_embed/similarity"
-                        elif init_feature_flag == 3:
-                            repr_dir = "../result/drug_protein_embed/autoencoder"
-                        os.makedirs(repr_dir, exist_ok=True)
-                        #후속 파이프라인 모델 이용
-                        torch.save(drug_repr, os.path.join(repr_dir, f"drug_repr_fold{fold+1}.pt"))
-                        torch.save(protein_repr, os.path.join(repr_dir, f"protein_repr_fold{fold+1}.pt"))
-                        #확인용
-                        np.savetxt(os.path.join(repr_dir, f"drug_repr_fold{fold+1}.txt"), drug_repr.cpu().numpy())
-                        np.savetxt(os.path.join(repr_dir, f"protein_repr_fold{fold+1}.txt"), protein_repr.cpu().numpy())
-                        print("\nSave drug,protein representation.")
-                        #PR최고일 때 epoch 출력
-                        print(f"epoch:{epoch}. save drug, protein representation")
-
-    print(f"Fold {fold+1} Results: Epoch {best_epoch} - ROC: {best_test_roc:.4f}, PR: {best_test_pr:.4f}, F1: {best_test_f1:.4f}, Accuracy: {best_test_acc:.4f}")
+                if epoch>100:
+                    #drug, protein representation 저장
+                    if init_feature_flag == 0:
+                        repr_dir = "../result/drug_protein_embed/random"
+                    elif init_feature_flag == 1:
+                        repr_dir = "../result/drug_protein_embed/pretrained"
+                    elif init_feature_flag == 2:
+                        repr_dir = "../result/drug_protein_embed/similarity"
+                    elif init_feature_flag == 3:
+                        repr_dir = "../result/drug_protein_embed/auto_encoder"
+                    os.makedirs(repr_dir, exist_ok=True)
+                    #후속 파이프라인 모델 이용
+                    torch.save(drug_repr, os.path.join(repr_dir, f"drug_repr_fold{fold+1}.pt"))
+                    torch.save(protein_repr, os.path.join(repr_dir, f"protein_repr_fold{fold+1}.pt"))
+                    #확인용
+                    # np.savetxt(os.path.join(repr_dir, f"drug_repr_fold{fold+1}.txt"), drug_repr.cpu().numpy())
+                    # np.savetxt(os.path.join(repr_dir, f"protein_repr_fold{fold+1}.txt"), protein_repr.cpu().numpy())
+                    # print("\nSave drug,protein representation.")
+                    #PR최고일 때 epoch 출력
+                    print(f"epoch:{epoch + 1}. save drug, protein representation")     
+            # early stopping을 위한 부분
+            else:
+                    current_patience = current_patience + 1
+            if current_patience >= patience:
+                print(f"Early stopping triggered at epoch {epoch + 1} after {patience} epochs of no imporvement on Test Loss.")
+                break
+    # 걸리는 시간 표시   
+    fold_end_time = time.time()
+    fold_duration = fold_end_time - fold_start_time
+    print(f"Fold {fold+1} Results: Epoch {best_epoch} - ROC: {best_test_roc:.4f}, PR: {best_test_pr:.4f}, F1: {best_test_f1:.4f}, Accuracy: {best_test_acc:.4f}, Duration: {fold_duration:.2f} seconds ({fold_duration/60:.2f} minutes).")
 
     best_fold_history['epochs'].append(best_epoch)
     best_fold_history['test_roc'].append(best_test_roc)
@@ -276,18 +309,26 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
 
     all_folds_history[f"fold_{fold+1}"] = fold_history
 
+    if best_test_loss < best_fold_loss:
+        best_fold_loss = best_test_loss
+        best_fold_num = fold + 1
+
+overall_end_time = time.time()
+overall_duration = overall_end_time - overall_start_time
+print(f"Total training duration for {n_splits} folds: {overall_duration:.2f} seconds ({overall_duration/60:.2f} minutes), Best Fold: Fold{best_fold_num} with {best_fold_loss} loss.")
+
 if init_feature_flag == 0:
-    history_file_path = os.path.join(save_dir, f"eval_history/random/{dataset_name}_all_folds_history_original.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/random/{dataset_name}_best_fold_history_random.pkl")
 elif init_feature_flag == 1:
-    history_file_path = os.path.join(save_dir, f"eval_history/pretrained/{dataset_name}_all_folds_history_pretrained.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/pretrained/{dataset_name}_best_fold_history_pretrained.pkl")
 elif init_feature_flag == 2:
-    history_file_path = os.path.join(save_dir, f"eval_history/similarity/{dataset_name}_all_folds_history_similarity.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/similarity/{dataset_name}_best_fold_history_similarity.pkl")
 elif init_feature_flag == 3:
-    history_file_path = os.path.join(save_dir, f"eval_history/autoencoder/{dataset_name}_all_folds_history_autoencoder.pkl")
+    history_file_path = os.path.join(save_dir, f"eval_history/auto_encoder/{dataset_name}_best_fold_history_auto_encoder.pkl")
 
 try:
     with open(history_file_path, 'wb') as f:
-        pickle.dump(all_folds_history, f)
+        pickle.dump(all_folds_history[f'fold_{best_fold_num}'], f)
     print(f"\nAll folds history saved to: {history_file_path}")
 except Exception as e:
     print("Error saving history file: {e}")
@@ -297,6 +338,5 @@ for key in best_fold_history:
     values = best_fold_history[key]
     avg = sum(values) / len(values)
     print(f"Average {key}: {avg:.4f}")
-
 
 print("\nSimplified model training and evaluation finished.")
