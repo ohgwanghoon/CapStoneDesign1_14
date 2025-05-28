@@ -17,7 +17,7 @@ seed = 47
 args = setup(default_configure, seed)
 
 # --- HAN_DTI 관련 하이퍼파라미터 설정 ---
-in_size_initial = 512  # 초기 랜덤 특징 벡터 차원 (또는 실제 특징 사용 시 해당 차원)
+in_size_initial = 512  # 초기 특징 벡터 차원 (또는 실제 특징 사용 시 해당 차원)
 han_hidden_size = 256 # HAN 내부 GNN의 hidden 차원
 han_out_size = 128     # 최종 Drug/Protein 표현 벡터 차원
 dropout_han = 0.5      # HAN 모듈에 전달할 dropout 값 (HAN 내부에서 사용되지 않는다면 0)
@@ -189,6 +189,11 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
         # ROC/PR 커브를 위한 데이터 (매 평가 시점마다 저장)
         'test_true_labels': [], # 실제 테스트 레이블 리스트
         'test_pred_scores': [], # 모델의 예측 확률(점수) 리스트 (상호작용한다에 대한)
+        'best_epoch': [],
+        'best_roc': [],
+        'best_pr': [],
+        'best_acc': [],
+        'duration': [],
     }
 
     # 조기 종료 및 최고 성능 모델 저장 관련 변수 초기화
@@ -244,7 +249,7 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
             # if current_test_roc > best_test_roc:
             #     best_test_roc = current_test_roc
             if current_test_loss < best_test_loss: # 최고 성능일 때 모델 저장, loss 기준
-                    
+                current_patience = 0
                 #accuracy 계산
                 predicted_labels = (probabilities_class1 >= 0.5).long()
                 correct = (predicted_labels == test_labels_fold).sum().item()
@@ -306,6 +311,10 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
     best_fold_history['test_acc'].append(best_test_acc)
     best_fold_history['test_pr'].append(best_test_pr)
     best_fold_history['test_f1'].append(best_test_f1)
+    fold_history['best_epoch'].append(best_epoch)
+    fold_history['best_roc'].append(best_test_roc)
+    fold_history['best_pr'].append(best_test_pr)
+    fold_history['best_acc'].append(best_test_acc)
 
     all_folds_history[f"fold_{fold+1}"] = fold_history
 
