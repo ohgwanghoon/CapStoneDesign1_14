@@ -1,0 +1,3 @@
+drug/protein의 물리적 구조를 initial feature에 반영하였습니다. 
+drug: SMILES를 input으로 chemBERTa를 통해서 약물의 분자적 특징을 가진 representation을 만들었습니다.
+protein: sequence를 input으로 ESM을 통해서 단백질의 구조적 특징을 가진 representation을 만들었습니다.
