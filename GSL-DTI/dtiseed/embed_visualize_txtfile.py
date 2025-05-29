@@ -69,7 +69,7 @@ def visualize_tsne_txt(file_path, labels=None, title="t-SNE Visualization", perp
 
 # 예시 사용
 if __name__ == "__main__":
-    file_path = "../data/heter/Similarity_Matrix_Drugs.txt"
+    file_path = "../init_feature/standard_drug_similarity.txt"
 
     # 예시: 라벨이 있다면 여기에 정의
     # labels = np.array([...])
