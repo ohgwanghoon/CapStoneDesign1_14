@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -49,6 +50,10 @@ def train_autoencoder(data: np.ndarray, input_dim: int, save_path: str):
 
     embedding = model.encoder(X).detach()
     torch.save(embedding, save_path)
+    save_path_txt = os.path.splitext(save_path)[0] + ".txt"
+    np.savetxt(save_path_txt,
+               embedding.cpu().numpy(),
+               fmt="%.6f", delimiter= "\t")
 
 # =========================
 # 데이터 불러오기 및 실행

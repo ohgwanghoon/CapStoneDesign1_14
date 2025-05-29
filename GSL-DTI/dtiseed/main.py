@@ -47,12 +47,18 @@ hd_in_size = in_size_initial
 hp_in_size = in_size_initial
 
 # 초기 임베딩 플래그
-init_feature_flag = 3
+init_feature_flag = 0
 init_dim_change = False # 초기 임베딩 바뀌는지 여부
 
 if init_feature_flag == 0 :
     # hd = torch.randn((num_nodes[0], hd_in_size)) # num_nodes[0] = num_drug
     # hp = torch.randn((num_nodes[1], hp_in_size)) # num_nodes[1] = num_protein
+    # rand_dir = "../init_feature"
+    # os.makedirs(rand_dir, exist_ok=True)
+    # np.savetxt(os.path.join(rand_dir, "drug_embedding_random.txt"),
+    #            hd.cpu().numpy(), fmt="%.6f", delimiter="\t")
+    # np.savetxt(os.path.join(rand_dir, "protein_embedding_random.txt"),
+    #            hp.cpu().numpy(), fmt="%.6f", delimiter="\t")
     # 랜덤 초기 임베딩 불러오는 방식으로 변경
     hd = torch.load("../init_feature/drug_embedding_random.pt")
     hp = torch.load("../init_feature/protein_embedding_random.pt")
