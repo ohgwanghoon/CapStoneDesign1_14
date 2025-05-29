@@ -47,7 +47,7 @@ hd_in_size = in_size_initial
 hp_in_size = in_size_initial
 
 # 초기 임베딩 플래그
-init_feature_flag = 0
+init_feature_flag = 2
 init_dim_change = False # 초기 임베딩 바뀌는지 여부
 
 if init_feature_flag == 0 :
@@ -85,6 +85,12 @@ elif init_feature_flag == 2:
     p_sim_mat = np.loadtxt(p_sim_mat_file_path)
     hp = torch.tensor(p_sim_mat, dtype=torch.float)
     #정규화
+    sim_dir = "../init_feature"
+    os.makedirs(sim_dir, exist_ok=True)
+    np.savetxt(os.path.join(sim_dir, "drug_embedding_similarity.txt"),
+               hd, fmt="%.6f", delimiter="\t")
+    np.savetxt(os.path.join(sim_dir, "protein_embedding_similarity.txt"),
+               hp, fmt="%.6f", delimiter="\t")
     hd = (hd - hd.mean(axis=0)) / hd.std(axis=0)
     hp = (hp - hp.mean(axis=0)) / hp.std(axis=0)
     #hd, hp의 feature dimension
