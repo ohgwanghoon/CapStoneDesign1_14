@@ -1,0 +1,2 @@
+drug와 protein 사이의 similarity를 feature로 사용합니다.
+drug와 protein 간의 상관관계 정보를 feature에 내포시킵니다.
