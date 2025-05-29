@@ -16,7 +16,7 @@ from modeltestdtiseed_rep_infer import DTI_Model, FeatureAlignMLP
 DATASET_NAME = "heter"
 # 어떤 Fold의 모델과 표현 벡터를 사용할지 지정
 # 모든 fold에 대해 실행하려면 이 부분을 반복문으로 만들거나 스크립트 인자로 받아야 함
-TARGET_FOLD_NUMBER = 5 # 예시: Fold 1의 결과 사용
+# target_fold_number = 5 # 예시: Fold 1의 결과 사용
 
 BASE_RESULT_DIR = "../result" # main.py의 save_dir과 일치
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -67,20 +67,22 @@ for config in embedding_configs:
     current_init_flag = config["flag_val"]
     current_model_suffix = config["name"]
     current_init_dim_change = config["init_dim_change"]
-
-    print(f"\n\n--- Processing Inference for Model with '{current_model_suffix}' Embeddings (Fold {TARGET_FOLD_NUMBER}) ---")
-
+    history_path = os.path.join(BASE_RESULT_DIR, f"eval_history/{current_model_suffix}/{DATASET_NAME}_best_fold_history_{current_model_suffix}.pkl")
+    with open(history_path, 'rb') as f:
+        loaded_history = pickle.load(f)
+    target_fold_number = loaded_history['current_fold']
+    print(f"\n\n--- Processing Inference for Model with '{current_model_suffix}' Embeddings (Fold {target_fold_number}) ---")
     # 4.1. 모델 파일 및 학습된 Representation 파일 경로 설정
-    model_weights_path = os.path.join(BASE_RESULT_DIR, f"trained_weight/{current_model_suffix}/{DATASET_NAME}_fold{TARGET_FOLD_NUMBER}_best_loss_modelWeight.pt")
+    model_weights_path = os.path.join(BASE_RESULT_DIR, f"trained_weight/{current_model_suffix}/{DATASET_NAME}_fold{target_fold_number}_best_loss_modelWeight.pt")
     
     learned_repr_dir = os.path.join(BASE_RESULT_DIR, f"drug_protein_embed/{current_model_suffix}")
-    drug_repr_path = os.path.join(learned_repr_dir, f"drug_repr_fold{TARGET_FOLD_NUMBER}.pt")
-    protein_repr_path = os.path.join(learned_repr_dir, f"protein_repr_fold{TARGET_FOLD_NUMBER}.pt")
+    drug_repr_path = os.path.join(learned_repr_dir, f"drug_repr_fold{target_fold_number}.pt")
+    protein_repr_path = os.path.join(learned_repr_dir, f"protein_repr_fold{target_fold_number}.pt")
 
     # 4.2. 결과 저장 폴더 및 파일 경로 설정
     output_inference_subdir = os.path.join(BASE_RESULT_DIR, f"inference_score/{current_model_suffix}")
     os.makedirs(output_inference_subdir, exist_ok=True)
-    all_scores_file_path = os.path.join(output_inference_subdir, f"all_pairs_dti_scores_{DATASET_NAME}_fold{TARGET_FOLD_NUMBER}.txt")
+    all_scores_file_path = os.path.join(output_inference_subdir, f"all_pairs_dti_scores_{DATASET_NAME}_fold{target_fold_number}.txt")
 
     # 4.3. DTI_Model 초기화에 필요한 실제 원본 특징 차원 결정 (main.py 로직과 동일하게)
     # 이 부분은 DTI_Model의 FeatureAlignMLP의 입력 차원을 정확히 설정하기 위함입니다.

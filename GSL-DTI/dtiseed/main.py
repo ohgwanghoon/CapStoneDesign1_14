@@ -47,7 +47,7 @@ hd_in_size = in_size_initial
 hp_in_size = in_size_initial
 
 # 초기 임베딩 플래그
-init_feature_flag = 2
+init_feature_flag = 3
 init_dim_change = False # 초기 임베딩 바뀌는지 여부
 
 if init_feature_flag == 0 :
@@ -205,7 +205,7 @@ for fold, (train_idx_split, test_idx_split) in enumerate(skf.split(data_indices,
         'best_roc': [],
         'best_pr': [],
         'best_acc': [],
-        'duration': [],
+        'current_fold': fold+1
     }
 
     # 조기 종료 및 최고 성능 모델 저장 관련 변수 초기화
